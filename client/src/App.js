@@ -119,7 +119,7 @@ async function submitPost(text) {
                 intentions: []
             }
         ],
-        author: 'bob'
+        author: 'Bobby Blogger'
     }
     const response = await fetch(url, {
         method: 'POST',
