@@ -128,18 +128,19 @@ const MyComponent = () => {
     const [currentPost, setCurrentPost] = React.useState()
     const [currentQuestion, setCurrentQuestion] = React.useState()
 
-    React.useEffect(() => {
-        getPosts(setPosts)
-    }, [])
     const blogQuery = document.location.search
         .replace(/^\?/, '')
         .split('&')
         .find(item => item.split('=')[0] === 'blogId')
+
+    const blogId = blogQuery.split('=')[1]
+
+    React.useEffect(() => {
+        getPosts(setPosts, blogId)
+    }, [])
     if (!blogQuery) {
         return <div>Ensure you have `?blogId=` in your url</div>
     }
-
-    const blogId = blogQuery.split('=')[1]
 
     return (
         <div
