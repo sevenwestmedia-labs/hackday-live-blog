@@ -1,4 +1,4 @@
-name: server
+name: live-blog-server
 runtime: nodejs
 description: A minimal AWS TypeScript Pulumi program
 backend:
