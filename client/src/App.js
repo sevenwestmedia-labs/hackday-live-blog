@@ -56,17 +56,17 @@ class BlogPost extends React.Component {
     }
 }
 
-class QuestionList extends React.Component {
-    render() {
-        const questions = this.props.questions.map(function(item) {
-            return (
-                <div>
-                    <Question key={item.id} question={item} />
-                </div>
-            )
-        })
-        return <div>{questions}</div>
-    }
+const QuestionList = ({ questions }) => {
+    return (
+        <React.Fragment>
+            <h2>Questions</h2>
+            <div>
+                {questions.map(function(item) {
+                    return <Question key={item.id} question={item} />
+                })}
+            </div>
+        </React.Fragment>
+    )
 }
 
 class Question extends React.Component {
@@ -161,43 +161,56 @@ const MyComponent = () => {
     const [currentPost, setCurrentPost] = React.useState()
     const [currentQuestion, setCurrentQuestion] = React.useState()
 
-    getPosts(setPosts)
+    React.useEffect(() => {
+        getPosts(setPosts)
+    },[])
 
     return (
-        <div className={css({ display: 'grid', gridTemplateColumns: '2fr 1fr' })}>
-            <div>
-                <StatusBar currentPost={currentPost} currentQuestion={currentQuestion} />
-                <ReactQuill value={text} onChange={e => setText(e)} />
-                <button
-                    onClick={async () => {
-                        if (!currentPost) {
-                            const newItem = await submitPost(text)
-                            setPosts([newItem, ...posts])
+        <div
+            className={css({
+                display: 'grid',
+                gridTemplateColumns: '2fr 1fr',
+                gridColumnGap: '18px',
+                height: '100vh',
+                margin: '18px'
+            })}
+        >
+            <div className={css({ display: 'grid', gridTemplateRows: 'min-content min-content auto' })}>
+                <h2>Live blog admin</h2>
+                <div>
+                    <StatusBar currentPost={currentPost} currentQuestion={currentQuestion} />
+                    <ReactQuill value={text} onChange={e => setText(e)} />
+                    <button
+                        onClick={async () => {
+                            if (!currentPost) {
+                                const newItem = await submitPost(text)
+                                setPosts([newItem, ...posts])
+                                setCurrentPost(null)
+                                setText('')
+                            } else {
+                                const newPosts = posts.slice()
+                                console.log(currentPostIndex)
+                                newPosts[currentPostIndex].blocks[0].text = stripHtml(text)
+                                setPosts(newPosts)
+                                await submitPut(newPosts[currentPostIndex])
+                                setCurrentPostIndex(null)
+                                setCurrentPost(null)
+                                setText('')
+                            }
+                        }}
+                    >
+                        {currentPost ? 'Edit' : 'Submit'}
+                    </button>
+                    <button
+                        onClick={async () => {
                             setCurrentPost(null)
                             setText('')
-                        } else {
-                            const newPosts = posts.slice()
-                            console.log(currentPostIndex)
-                            newPosts[currentPostIndex].blocks[0].text = stripHtml(text)
-                            setPosts(newPosts)
-                            await submitPut(newPosts[currentPostIndex])
-                            setCurrentPostIndex(null)
-                            setCurrentPost(null)
-                            setText('')
-                        }
-                    }}
-                >
-                    {currentPost ? 'Edit' : 'Submit'}
-                </button>
-                <button
-                    onClick={async () => {
-                        setCurrentPost(null)
-                        setText('')
-                    }}
-                >
-                    Cancel
-                </button>
-                <div id="posts">
+                        }}
+                    >
+                        Cancel
+                    </button>
+                </div>
+                <div id="posts" className={css({ overflowY: 'auto' })}>
                     <PostList
                         posts={posts}
                         editPost={index => {
