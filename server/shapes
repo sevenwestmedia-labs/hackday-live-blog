@@ -1,0 +1,24 @@
+{
+    id: string , // blog id
+    post: number, // post number
+    content: {
+        posted: UTC Timestamp,
+        blocks: [],
+        author: string
+    }
+}
+
+
+// Question form
+// Name*:
+// Email:
+// Question*: 
+
+[{
+    type: 'pullquote',
+    author: 'Joe Bloggs',
+    text: 'My question'
+}, {
+    type: 'text',
+    text: 'Response'
+}]
