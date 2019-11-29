@@ -7,7 +7,7 @@ import { Policy } from '@pulumi/aws/iam'
 import { getCurrentPostId } from './getCurrentPostId'
 import { notifyClients } from './notify'
 
-export const table = new aws.dynamodb.Table('live-blog-table', {
+const table = new aws.dynamodb.Table('live-blog-table', {
   attributes: [
     {
       name: 'Id',
