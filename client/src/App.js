@@ -13,7 +13,7 @@ class StatusBar extends React.Component {
         var status
         const post = this.props.currentPost
         if (post) {
-            status = 'Editiing post ' + post.post + ' published at ' + post.posted
+            status = 'Editiing post ' + post.post + ' published at ' + post.content.posted
         } else {
             status = 'Add a new post'
         }
@@ -25,10 +25,9 @@ class PostList extends React.Component {
     render() {
         const editPost = this.props.editPost
         const posts = this.props.posts.map(function(item, index) {
+            console.log(item)
             return (
-                <div key={index}>
-                    <BlogPost index={index} post={item} editPost={editPost} />
-                </div>
+              <BlogPost key={item.post} index={index} post={item} editPost={editPost} />
             )
         })
         return posts
@@ -37,13 +36,13 @@ class PostList extends React.Component {
 
 class BlogPost extends React.Component {
     render() {
-        const post = this.props.post
+        const content = this.props.post.content
         const index = this.props.index
         const editPost = this.props.editPost
         return (
             <div id={index}>
-                <header>{post.posted}</header>
-                <p>{Parser(post.blocks[0].text)}</p>
+                <header>{content.posted}</header>
+                <p>{Parser(content.blocks ? content.blocks[0].text : '')}</p>
                 <button
                     onClick={() => {
                         editPost(index)
@@ -101,20 +100,17 @@ async function getPosts(setPosts) {
         }
     })
     const responseBody = await response.json()
-    console.log(response, responseBody)
+    //console.log(response, responseBody)
 
     if(responseBody.items) {
-        const items = responseBody.items.map((item) => {
-            return item.content
-        });
-        setPosts(items)
+        setPosts(responseBody.items)
     }
 }
 
 async function submitPost(text) {
     const url = restUri + '/posts/' + blogId
     const stripped = stripHtml(text)
-    const post = {
+    const content = {
         posted: new Date().toISOString(),
         blocks: [
             {
@@ -127,20 +123,24 @@ async function submitPost(text) {
     }
     const response = await fetch(url, {
         method: 'POST',
-        body: JSON.stringify(post),
+        body: JSON.stringify(content),
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json'
         }
     })
     const responseBody = await response.json()
-    console.log(response, responseBody)
-    post.post = responseBody.postId
+    //console.log(response, responseBody)
+    const post = {
+        id: blogId,
+        post: responseBody.postId,
+        content: content
+    }
     return post
 }
 
 async function submitPut(post) {
-    console.log(post)
+    //console.log(post)
     const url = restUri + `/posts/${blogId}/${post.post}`
     const response = await fetch(url, {
         method: 'PUT',
@@ -189,8 +189,8 @@ const MyComponent = () => {
                                 setText('')
                             } else {
                                 const newPosts = posts.slice()
-                                console.log(currentPostIndex)
-                                newPosts[currentPostIndex].blocks[0].text = stripHtml(text)
+                                //console.log(currentPostIndex)
+                                newPosts[currentPostIndex].content.blocks[0].text = stripHtml(text)
                                 setPosts(newPosts)
                                 await submitPut(newPosts[currentPostIndex])
                                 setCurrentPostIndex(null)
@@ -217,7 +217,7 @@ const MyComponent = () => {
                             const currentPost = posts[index]
                             setCurrentPost(currentPost)
                             setCurrentPostIndex(index)
-                            setText(currentPost.blocks[0].text)
+                            setText(currentPost.content.blocks[0].text)
                         }}
                     />
                 </div>
