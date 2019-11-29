@@ -71,12 +71,13 @@ const createPostLambda = new aws.lambda.CallbackFunction(
       const currentPostId = await getCurrentPostId(table.name.get(), id)
       const postData = JSON.parse(event.body!)
 
+      const postNumber =
+        currentPostId.Items && currentPostId.Items[0]
+          ? Number(currentPostId.Items![0].Post) + 1
+          : 1
       const NewItem = {
         Id: id,
-        Post:
-          currentPostId.Items && currentPostId.Items[0]
-            ? Number(currentPostId.Items![0].Post) + 1
-            : 1,
+        Post: postNumber,
         Content: JSON.stringify(postData)
       }
       await client
@@ -98,7 +99,11 @@ const createPostLambda = new aws.lambda.CallbackFunction(
         return { statusCode: 500, body: e.stack }
       }
 
-      return { statusCode: 201, body: 'Created' }
+      return {
+        statusCode: 201,
+        body: JSON.stringify({ postId: postNumber }),
+        headers: { 'Content-Type': 'application/json' }
+      }
     }
   }
 )
