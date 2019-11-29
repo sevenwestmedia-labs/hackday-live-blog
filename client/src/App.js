@@ -58,7 +58,7 @@ function stripHtml(html) {
     return tmp.textContent || tmp.innerText || ''
 }
 
-async function getPosts(setPosts) {
+async function getPosts(setPosts, blogId) {
     const url = `${restUri}/posts/${blogId}`
     const response = await fetch(url, {
         method: 'GET',
