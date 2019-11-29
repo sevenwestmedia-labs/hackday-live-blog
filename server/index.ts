@@ -26,6 +26,25 @@ const table = new aws.dynamodb.Table('live-blog-table', {
   writeCapacity: 5
 })
 
+const questions = new aws.dynamodb.Table('live-blog-questions', {
+  attributes: [
+    {
+      name: 'Id',
+      type: 'S'
+    },
+    {
+      name: 'QuestionId',
+      type: 'S'
+    }
+  ],
+
+  billingMode: 'PAY_PER_REQUEST',
+  hashKey: 'Id',
+  rangeKey: 'QuestionId',
+  readCapacity: 5,
+  writeCapacity: 5
+})
+
 const postRole = new aws.iam.Role('live-blog-create-post-role', {
   assumeRolePolicy: {
     Version: '2012-10-17',
@@ -69,7 +88,12 @@ const createPostLambda = new aws.lambda.CallbackFunction(
       const client = new aws.sdk.DynamoDB.DocumentClient()
 
       const currentPostId = await getCurrentPostId(table.name.get(), id)
-      const postData = JSON.parse(event.body!)
+
+      const postData = JSON.parse(
+        event.isBase64Encoded
+          ? Buffer.from(event.body!, 'base64').toString('ascii')
+          : event.body!
+      )
 
       const postNumber =
         currentPostId.Items && currentPostId.Items[0]
@@ -102,7 +126,10 @@ const createPostLambda = new aws.lambda.CallbackFunction(
       return {
         statusCode: 201,
         body: JSON.stringify({ postId: postNumber }),
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       }
     }
   }
@@ -116,7 +143,11 @@ const updatePostLambda = new aws.lambda.CallbackFunction(
       const id = event.pathParameters!['id']
       const postNumber = Number(event.pathParameters!['post'])
       const client = new aws.sdk.DynamoDB.DocumentClient()
-      const postData = JSON.parse(event.body!)
+      const postData = JSON.parse(
+        event.isBase64Encoded
+          ? Buffer.from(event.body!, 'base64').toString('ascii')
+          : event.body!
+      )
 
       const NewItem = {
         Id: id,
@@ -142,10 +173,35 @@ const updatePostLambda = new aws.lambda.CallbackFunction(
         return { statusCode: 500, body: e.stack }
       }
 
-      return { statusCode: 200, body: 'Updated' }
+      return {
+        statusCode: 200,
+        body: 'Updated',
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      }
     }
   }
 )
+
+const optionsRoute: awsx.apigateway.Route = {
+  path: '/posts/{id}',
+  method: 'OPTIONS',
+
+  eventHandler: async () => {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers':
+          'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+      },
+      body: ''
+    }
+  }
+}
+
 const api = new awsx.apigateway.API('live-blog', {
   routes: [
     {
@@ -178,6 +234,7 @@ const api = new awsx.apigateway.API('live-blog', {
         }
       }
     },
+    optionsRoute,
     {
       path: '/posts/{id}',
       method: 'POST',
