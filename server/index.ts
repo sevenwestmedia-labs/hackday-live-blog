@@ -2,6 +2,8 @@ import * as aws from '@pulumi/aws'
 import * as awsx from '@pulumi/awsx'
 import { Post } from './posts'
 import { getPosts } from './posts'
+import { APIGatewayProxyEvent } from 'aws-lambda'
+import { Policy } from '@pulumi/aws/iam'
 
 const table = new aws.dynamodb.Table('live-blog-table', {
   attributes: [
@@ -22,6 +24,120 @@ const table = new aws.dynamodb.Table('live-blog-table', {
   writeCapacity: 5
 })
 
+const postRole = new aws.iam.Role('live-blog-create-post-role', {
+  assumeRolePolicy: {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Sid: '',
+        Effect: 'Allow',
+        Principal: {
+          Service: ['lambda.amazonaws.com', 'apigateway.amazonaws.com']
+        },
+        Action: 'sts:AssumeRole'
+      }
+    ]
+  }
+})
+new aws.iam.RolePolicyAttachment(`live-blog-create-post-role-policy`, {
+  role: postRole,
+  policyArn: aws.iam.AWSLambdaFullAccess
+})
+new aws.iam.RolePolicyAttachment(`live-blog-create-post-role-policy-attach`, {
+  role: postRole,
+  policyArn: new Policy('live-blog-create-post-role-policy-manage-api', {
+    policy: {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['execute-api:Invoke', 'execute-api:ManageConnections'],
+          Resource: 'arn:aws:execute-api:*:*:*'
+        }
+      ]
+    }
+  }).arn
+})
+const post = new aws.lambda.CallbackFunction('live-blog-create-post', {
+  role: postRole,
+  callback: async (event: APIGatewayProxyEvent) => {
+    const id = event.pathParameters!['id']
+    const client = new aws.sdk.DynamoDB.DocumentClient()
+    const connectionData = await client
+      .scan({
+        ProjectionExpression: 'ConnectionId',
+        TableName: connections.name.get()
+      })
+      .promise()
+
+    const apiGatewayManagement = new aws.sdk.ApiGatewayManagementApi({
+      endpoint: '0un6utp9lb.execute-api.ap-southeast-2.amazonaws.com/stage'
+    })
+
+    const currentPostId = await client
+      .query({
+        TableName: table.name.get(),
+        KeyConditionExpression: 'Id = :id',
+        ExpressionAttributeValues: {
+          ':id': id
+        },
+        Limit: 1,
+        ScanIndexForward: false,
+        ConsistentRead: true
+      })
+      .promise()
+    const postData = JSON.parse(event.body!)
+
+    const NewItem = {
+      Id: id,
+      Post:
+        currentPostId.Items && currentPostId.Items[0]
+          ? Number(currentPostId.Items![0].Post) + 1
+          : 1,
+      Content: JSON.stringify(postData)
+    }
+    await client
+      .put({
+        TableName: table.name.get(),
+        Item: NewItem
+      })
+      .promise()
+
+    const post: Post = {
+      id: NewItem.Id,
+      post: NewItem.Post,
+      content: postData
+    }
+    const postCalls = connectionData.Items!.map(async ({ ConnectionId }) => {
+      try {
+        await apiGatewayManagement
+          .postToConnection({ ConnectionId, Data: JSON.stringify(post) })
+          .promise()
+      } catch (e) {
+        if (e.statusCode === 410) {
+          console.log(`Found stale connection, deleting ${ConnectionId}`)
+          await client
+            .delete({
+              TableName: connections.name.get(),
+              Key: { ConnectionId }
+            })
+            .promise()
+        } else {
+          throw e
+        }
+      }
+    })
+
+    try {
+      await Promise.all(postCalls)
+    } catch (e) {
+      return { statusCode: 500, body: e.stack }
+    }
+
+    return { statusCode: 200, body: 'Posted' }
+  }
+})
+
 const api = new awsx.apigateway.API('live-blog', {
   routes: [
     {
@@ -33,6 +149,9 @@ const api = new awsx.apigateway.API('live-blog', {
         const posts = await getPosts(table.name.get(), id)
         return {
           statusCode: 200,
+          headers: {
+            'Access-Control-Allow-Origin': '*'
+          },
           body: JSON.stringify(posts)
         }
       }
@@ -54,85 +173,8 @@ const api = new awsx.apigateway.API('live-blog', {
     {
       path: '/posts/{id}',
       method: 'POST',
-      eventHandler: async event => {
-        const id = event.pathParameters!['id']
-        const client = new aws.sdk.DynamoDB.DocumentClient()
-        const connectionData = await client
-          .scan({
-            ProjectionExpression: 'ConnectionId',
-            TableName: connections.name.get()
-          })
-          .promise()
 
-        const apiGatewayManagement = new aws.sdk.ApiGatewayManagementApi({
-          endpoint:
-            'rv08ei0mn0.execute-api.ap-southeast-2.amazonaws.com/stage/@connections'
-        })
-
-        const currentPostId = await client
-          .query({
-            TableName: table.name.get(),
-            KeyConditionExpression: 'Id = :id',
-            ExpressionAttributeValues: {
-              ':id': id
-            },
-            Limit: 1,
-            ScanIndexForward: false,
-            ConsistentRead: true
-          })
-          .promise()
-        const postData = JSON.parse(event.body!)
-
-        const NewItem = {
-          Id: id,
-          Post:
-            currentPostId.Items && currentPostId.Items[0]
-              ? Number(currentPostId.Items![0].Post) + 1
-              : 1,
-          Content: JSON.stringify(postData)
-        }
-        await client
-          .put({
-            TableName: table.name.get(),
-            Item: NewItem
-          })
-          .promise()
-
-        const post: Post = {
-          id: NewItem.Id,
-          post: NewItem.Post,
-          content: postData
-        }
-        const postCalls = connectionData.Items!.map(
-          async ({ ConnectionId }) => {
-            try {
-              await apiGatewayManagement
-                .postToConnection({ ConnectionId, Data: JSON.stringify(post) })
-                .promise()
-            } catch (e) {
-              if (e.statusCode === 410) {
-                console.log(`Found stale connection, deleting ${ConnectionId}`)
-                await client
-                  .delete({
-                    TableName: connections.name.get(),
-                    Key: { ConnectionId }
-                  })
-                  .promise()
-              } else {
-                throw e
-              }
-            }
-          }
-        )
-
-        try {
-          await Promise.all(postCalls)
-        } catch (e) {
-          return { statusCode: 500, body: e.stack }
-        }
-
-        return { statusCode: 200, body: 'Posted' }
-      }
+      eventHandler: post
     }
   ]
 })
