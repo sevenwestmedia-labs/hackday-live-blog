@@ -208,7 +208,11 @@ const createQuestionLambda = new aws.lambda.CallbackFunction('live-blog-create-q
         }
 
         try {
-            await notifyClients(questionConnections.name.get(), ``, question)
+            await notifyClients(
+                questionConnections.name.get(),
+                'senpaqk2re.execute-api.ap-southeast-2.amazonaws.com/stage',
+                question
+            )
         } catch (e) {
             return { statusCode: 500, body: e.stack }
         }
