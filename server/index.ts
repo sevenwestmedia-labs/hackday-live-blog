@@ -4,8 +4,10 @@ import { Post } from './posts'
 import { getPosts } from './posts'
 import { APIGatewayProxyEvent } from 'aws-lambda'
 import { Policy } from '@pulumi/aws/iam'
+import { getCurrentPostId } from './getCurrentPostId'
+import { notifyClients } from './notify'
 
-const table = new aws.dynamodb.Table('live-blog-table', {
+export const table = new aws.dynamodb.Table('live-blog-table', {
   attributes: [
     {
       name: 'Id',
@@ -58,86 +60,87 @@ new aws.iam.RolePolicyAttachment(`live-blog-create-post-role-policy-attach`, {
     }
   }).arn
 })
-const post = new aws.lambda.CallbackFunction('live-blog-create-post', {
-  role: postRole,
-  callback: async (event: APIGatewayProxyEvent) => {
-    const id = event.pathParameters!['id']
-    const client = new aws.sdk.DynamoDB.DocumentClient()
-    const connectionData = await client
-      .scan({
-        ProjectionExpression: 'ConnectionId',
-        TableName: connections.name.get()
-      })
-      .promise()
+const createPostLambda = new aws.lambda.CallbackFunction(
+  'live-blog-create-post',
+  {
+    role: postRole,
+    callback: async (event: APIGatewayProxyEvent) => {
+      const id = event.pathParameters!['id']
+      const client = new aws.sdk.DynamoDB.DocumentClient()
 
-    const apiGatewayManagement = new aws.sdk.ApiGatewayManagementApi({
-      endpoint: '0un6utp9lb.execute-api.ap-southeast-2.amazonaws.com/stage'
-    })
+      const currentPostId = await getCurrentPostId(table.name.get(), id)
+      const postData = JSON.parse(event.body!)
 
-    const currentPostId = await client
-      .query({
-        TableName: table.name.get(),
-        KeyConditionExpression: 'Id = :id',
-        ExpressionAttributeValues: {
-          ':id': id
-        },
-        Limit: 1,
-        ScanIndexForward: false,
-        ConsistentRead: true
-      })
-      .promise()
-    const postData = JSON.parse(event.body!)
-
-    const NewItem = {
-      Id: id,
-      Post:
-        currentPostId.Items && currentPostId.Items[0]
-          ? Number(currentPostId.Items![0].Post) + 1
-          : 1,
-      Content: JSON.stringify(postData)
-    }
-    await client
-      .put({
-        TableName: table.name.get(),
-        Item: NewItem
-      })
-      .promise()
-
-    const post: Post = {
-      id: NewItem.Id,
-      post: NewItem.Post,
-      content: postData
-    }
-    const postCalls = connectionData.Items!.map(async ({ ConnectionId }) => {
-      try {
-        await apiGatewayManagement
-          .postToConnection({ ConnectionId, Data: JSON.stringify(post) })
-          .promise()
-      } catch (e) {
-        if (e.statusCode === 410) {
-          console.log(`Found stale connection, deleting ${ConnectionId}`)
-          await client
-            .delete({
-              TableName: connections.name.get(),
-              Key: { ConnectionId }
-            })
-            .promise()
-        } else {
-          throw e
-        }
+      const NewItem = {
+        Id: id,
+        Post:
+          currentPostId.Items && currentPostId.Items[0]
+            ? Number(currentPostId.Items![0].Post) + 1
+            : 1,
+        Content: JSON.stringify(postData)
       }
-    })
+      await client
+        .put({
+          TableName: table.name.get(),
+          Item: NewItem
+        })
+        .promise()
 
-    try {
-      await Promise.all(postCalls)
-    } catch (e) {
-      return { statusCode: 500, body: e.stack }
+      const post: Post = {
+        id: NewItem.Id,
+        post: NewItem.Post,
+        content: postData
+      }
+
+      try {
+        await notifyClients(connections.name.get(), post)
+      } catch (e) {
+        return { statusCode: 500, body: e.stack }
+      }
+
+      return { statusCode: 201, body: 'Created' }
     }
-
-    return { statusCode: 200, body: 'Posted' }
   }
-})
+)
 
+const updatePostLambda = new aws.lambda.CallbackFunction(
+  'live-blog-update-post',
+  {
+    role: postRole,
+    callback: async (event: APIGatewayProxyEvent) => {
+      const id = event.pathParameters!['id']
+      const postNumber = Number(event.pathParameters!['post'])
+      const client = new aws.sdk.DynamoDB.DocumentClient()
+      const postData = JSON.parse(event.body!)
+
+      const NewItem = {
+        Id: id,
+        Post: postNumber,
+        Content: JSON.stringify(postData)
+      }
+      await client
+        .put({
+          TableName: table.name.get(),
+          Item: NewItem
+        })
+        .promise()
+
+      const post: Post = {
+        id: NewItem.Id,
+        post: NewItem.Post,
+        content: postData
+      }
+
+      try {
+        await notifyClients(connections.name.get(), post)
+      } catch (e) {
+        return { statusCode: 500, body: e.stack }
+      }
+
+      return { statusCode: 200, body: 'Updated' }
+    }
+  }
+)
 const api = new awsx.apigateway.API('live-blog', {
   routes: [
     {
@@ -174,7 +177,13 @@ const api = new awsx.apigateway.API('live-blog', {
       path: '/posts/{id}',
       method: 'POST',
 
-      eventHandler: post
+      eventHandler: createPostLambda
+    },
+    {
+      path: '/posts/{id}/{post}',
+      method: 'PUT',
+
+      eventHandler: updatePostLambda
     }
   ]
 })
