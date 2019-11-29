@@ -31,7 +31,7 @@ class PostList extends React.Component {
                 </div>
             )
         })
-        return <div>{posts}</div>
+        return posts
     }
 }
 
@@ -42,7 +42,8 @@ class BlogPost extends React.Component {
         const editPost = this.props.editPost
         return (
             <div id={index}>
-                {Parser(post.blocks[0].text)}
+                <header>{post.posted}</header>
+                <p>{Parser(post.blocks[0].text)}</p>
                 <button
                     onClick={() => {
                         editPost(index)
@@ -89,6 +90,25 @@ function stripHtml(html) {
     var tmp = document.createElement('DIV')
     tmp.innerHTML = html
     return tmp.textContent || tmp.innerText || ''
+}
+
+async function getPosts(setPosts) {
+    const url = `${restUri}/posts/${blogId}`
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+        }
+    })
+    const responseBody = await response.json()
+    console.log(response, responseBody)
+
+    if(responseBody.items) {
+        const items = responseBody.items.map((item) => {
+            return item.content
+        });
+        setPosts(items)
+    }
 }
 
 async function submitPost(text) {
@@ -141,6 +161,8 @@ const MyComponent = () => {
     const [currentPost, setCurrentPost] = React.useState()
     const [currentQuestion, setCurrentQuestion] = React.useState()
 
+    getPosts(setPosts)
+
     return (
         <div className={css({ display: 'grid', gridTemplateColumns: '2fr 1fr' })}>
             <div>
@@ -150,7 +172,7 @@ const MyComponent = () => {
                     onClick={async () => {
                         if (!currentPost) {
                             const newItem = await submitPost(text)
-                            setPosts([...posts, newItem])
+                            setPosts([newItem, ...posts])
                             setCurrentPost(null)
                             setText('')
                         } else {
