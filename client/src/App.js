@@ -3,10 +3,9 @@ import './App.css'
 import { css } from 'emotion'
 import ReactQuill from 'react-quill'
 import Parser from 'html-react-parser'
-//import {} from 'swm-cue-parser/dist/cjs/block';
+import { QuestionList } from './Questions'
 
-const restUri = 'https://4odo7ux4lc.execute-api.ap-southeast-2.amazonaws.com/stage'
-const blogId = 1
+export const restUri = 'https://4odo7ux4lc.execute-api.ap-southeast-2.amazonaws.com/stage'
 
 class StatusBar extends React.Component {
     render() {
@@ -26,9 +25,7 @@ class PostList extends React.Component {
         const editPost = this.props.editPost
         const posts = this.props.posts.map(function(item, index) {
             console.log(item)
-            return (
-              <BlogPost key={item.post} index={index} post={item} editPost={editPost} />
-            )
+            return <BlogPost key={item.post} index={index} post={item} editPost={editPost} />
         })
         return posts
     }
@@ -55,36 +52,6 @@ class BlogPost extends React.Component {
     }
 }
 
-const QuestionList = ({ questions }) => {
-    return (
-        <React.Fragment>
-            <h2>Questions</h2>
-            <div>
-                {questions.map(function(item) {
-                    return <Question key={item.id} question={item} />
-                })}
-            </div>
-        </React.Fragment>
-    )
-}
-
-class Question extends React.Component {
-    render() {
-        return (
-            <div id={this.props.key}>
-                {Parser(this.props.question.content)}
-                <button
-                    onClick={() => {
-                        this.props.editPost(this.props.id)
-                    }}
-                >
-                    Answer
-                </button>
-            </div>
-        )
-    }
-}
-
 function stripHtml(html) {
     var tmp = document.createElement('DIV')
     tmp.innerHTML = html
@@ -96,18 +63,18 @@ async function getPosts(setPosts) {
     const response = await fetch(url, {
         method: 'GET',
         headers: {
-            Accept: 'application/json',
+            Accept: 'application/json'
         }
     })
     const responseBody = await response.json()
     //console.log(response, responseBody)
 
-    if(responseBody.items) {
+    if (responseBody.items) {
         setPosts(responseBody.items)
     }
 }
 
-async function submitPost(text) {
+async function submitPost(text, blogId) {
     const url = restUri + '/posts/' + blogId
     const stripped = stripHtml(text)
     const content = {
@@ -139,8 +106,8 @@ async function submitPost(text) {
     return post
 }
 
-async function submitPut(post) {
-    //console.log(post)
+async function submitPut(post, blogId) {
+    console.log(post)
     const url = restUri + `/posts/${blogId}/${post.post}`
     const response = await fetch(url, {
         method: 'PUT',
@@ -163,7 +130,16 @@ const MyComponent = () => {
 
     React.useEffect(() => {
         getPosts(setPosts)
-    },[])
+    }, [])
+    const blogQuery = document.location.search
+        .replace(/^\?/, '')
+        .split('&')
+        .find(item => item.split('=')[0] === 'blogId')
+    if (!blogQuery) {
+        return <div>Ensure you have `?blogId=` in your url</div>
+    }
+
+    const blogId = blogQuery.split('=')[1]
 
     return (
         <div
@@ -176,14 +152,14 @@ const MyComponent = () => {
             })}
         >
             <div className={css({ display: 'grid', gridTemplateRows: 'min-content min-content auto' })}>
-                <h2>Live blog admin</h2>
+                <h2>Editing live blog '{blogId}'</h2>
                 <div>
                     <StatusBar currentPost={currentPost} currentQuestion={currentQuestion} />
                     <ReactQuill value={text} onChange={e => setText(e)} />
                     <button
                         onClick={async () => {
                             if (!currentPost) {
-                                const newItem = await submitPost(text)
+                                const newItem = await submitPost(text, blogId)
                                 setPosts([newItem, ...posts])
                                 setCurrentPost(null)
                                 setText('')
@@ -192,7 +168,7 @@ const MyComponent = () => {
                                 //console.log(currentPostIndex)
                                 newPosts[currentPostIndex].content.blocks[0].text = stripHtml(text)
                                 setPosts(newPosts)
-                                await submitPut(newPosts[currentPostIndex])
+                                await submitPut(newPosts[currentPostIndex], blogId)
                                 setCurrentPostIndex(null)
                                 setCurrentPost(null)
                                 setText('')
@@ -223,7 +199,14 @@ const MyComponent = () => {
                 </div>
             </div>
             <div>
-                <QuestionList questions={questions} />
+                <QuestionList
+                    questions={questions}
+                    blogId={blogId}
+                    createPost={async post => {
+                        await submitPost(text, blogId)
+                        setPosts([post, ...posts])
+                    }}
+                />
             </div>
         </div>
     )

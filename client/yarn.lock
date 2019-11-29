@@ -8420,6 +8420,11 @@ react-scripts@3.2.0:
   optionalDependencies:
     fsevents "2.0.7"
 
+react-use-websocket@^1.0.1:
+  version "1.0.1"
+  resolved "https://nexus.swmdigital.io/repository/js-combined/react-use-websocket/-/react-use-websocket-1.0.1.tgz#a836c37741c64aac2bf1b7061f26bc0e59982af9"
+  integrity sha512-K87v2LALDSkNIQfhqPY3TBEALd15yj9lh0u9LxG54P3CO3NcPCIMshFStQzyCaB2TcvoVPv0AVbSgl59ARrj3A==
+
 react@^16.12.0:
   version "16.12.0"
   resolved "https://registry.yarnpkg.com/react/-/react-16.12.0.tgz#0c0a9c6a142429e3614834d5a778e18aa78a0b83"
