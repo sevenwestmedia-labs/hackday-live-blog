@@ -53,7 +53,7 @@ export async function getQuestions(
             items: result.Items.map<Question>(item => ({
                 id: item.Id,
                 questionId: item.QuestionId,
-                content: JSON.parse(item.Content)
+                content: item.Content
             })),
             nextPost: next.Items ? (next.Items[0] ? next.Items[0].Post : undefined) : undefined
         }
@@ -63,7 +63,7 @@ export async function getQuestions(
         items: result.Items.map<Question>(item => ({
             id: item.Id,
             questionId: item.QuestionId,
-            content: JSON.parse(item.Content)
+            content: item.Content
         }))
     }
 }

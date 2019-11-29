@@ -113,7 +113,11 @@ const createPostLambda = new aws.lambda.CallbackFunction('live-blog-create-post'
         }
 
         try {
-            await notifyClients(connections.name.get(), post)
+            await notifyClients(
+                connections.name.get(),
+                '0un6utp9lb.execute-api.ap-southeast-2.amazonaws.com/stage',
+                post
+            )
         } catch (e) {
             return { statusCode: 500, body: e.stack }
         }
@@ -158,7 +162,11 @@ const updatePostLambda = new aws.lambda.CallbackFunction('live-blog-update-post'
         }
 
         try {
-            await notifyClients(connections.name.get(), post)
+            await notifyClients(
+                connections.name.get(),
+                '0un6utp9lb.execute-api.ap-southeast-2.amazonaws.com/stage',
+                post
+            )
         } catch (e) {
             return { statusCode: 500, body: e.stack }
         }
@@ -200,7 +208,7 @@ const createQuestionLambda = new aws.lambda.CallbackFunction('live-blog-create-q
         }
 
         try {
-            await notifyClients(questionConnections.name.get(), question)
+            await notifyClients(questionConnections.name.get(), ``, question)
         } catch (e) {
             return { statusCode: 500, body: e.stack }
         }
@@ -233,7 +241,11 @@ const deleteQuestionLambda = new aws.lambda.CallbackFunction('live-blog-delete-q
             .promise()
 
         try {
-            await notifyClients(questionConnections.name.get(), { deleted: true, questionId })
+            await notifyClients(
+                questionConnections.name.get(),
+                'senpaqk2re.execute-api.ap-southeast-2.amazonaws.com/stage',
+                { deleted: true, questionId }
+            )
         } catch (e) {
             return { statusCode: 500, body: e.stack }
         }
@@ -287,7 +299,7 @@ const api = new awsx.apigateway.API('live-blog', {
             eventHandler: async event => {
                 const id = event.pathParameters!['id']
 
-                const posts = await getQuestions(table.name.get(), id)
+                const posts = await getQuestions(questions.name.get(), id)
                 return {
                     statusCode: 200,
                     headers: {
